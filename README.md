@@ -1,112 +1,91 @@
-Day-Trade Signal Predictor
+# Day-Trade Signal Predictor
 
-A Stacking Ensemble for Next-Day Taiwanese Stock Day-Trading Prediction
+**A Stacking Ensemble for Next-Day Taiwanese Stock Day-Trading Prediction**
 
 A machine learning project designed to identify Taiwanese stocks with high next-day day-trading activity using multi-source market features and a three-model ensemble.
 
-In previous experiments using real market data, the model achieved approximately 85% average daily coverage of the actual top-30 target stocks. The current public version uses mock data to demonstrate the data-processing and modeling workflow. Because the original real-market data is not publicly available, the historical result cannot be independently reproduced using the mock-data implementation.
+In previous experiments using real market data, the model achieved approximately **85% average daily coverage of the actual top-30 target stocks**. The current public version uses mock data to demonstrate the data-processing and modeling workflow. Because the original real-market data is not publicly available, the historical result cannot be independently reproduced using the mock-data implementation.
 
-1. Project Overview
+## 1. Project Overview
 
-Objectives
+### Objectives
 
-Integrate multi-source Taiwanese stock market data into a consistent feature engineering pipeline.
+- Integrate multi-source Taiwanese stock market data into a consistent feature engineering pipeline.
+- Predict stocks likely to exhibit high day-trading activity on the following trading day.
+- Combine Logistic Regression, Random Forest, and LightGBM through a Stacking Ensemble.
+- Address class imbalance to improve the identification of target stocks.
+- Evaluate model performance using time-aware validation and daily top-30 coverage.
 
-Predict stocks likely to exhibit high day-trading activity on the following trading day.
+### Tech Stack
 
-Combine Logistic Regression, Random Forest, and LightGBM through a Stacking Ensemble.
+- **Language:** Python
+- **Data Processing:** Pandas, NumPy
+- **Machine Learning:** Scikit-learn, LightGBM
+- **Model Architecture:** Stacking Ensemble
+- **Evaluation:** Recall, Precision, F1-score, ROC-AUC, Average Daily Top-30 Coverage
 
-Address class imbalance to improve the identification of target stocks.
+## 2. Data Sources and Target Definition
 
-Evaluate model performance using time-aware validation and daily top-30 coverage.
-
-Tech Stack
-
-Language: Python
-
-Data Processing: Pandas, NumPy
-
-Machine Learning: Scikit-learn, LightGBM
-
-Model Architecture: Stacking Ensemble
-
-Evaluation: Recall, Precision, F1-score, ROC-AUC, Average Daily Top-30 Coverage
-
-2. Data Sources and Target Definition
-
-Data Sources
+### Data Sources
 
 The original pipeline integrates multiple Taiwanese stock market data sources, including:
 
-Intraday technical indicators
+- Intraday technical indicators
+- Trading volume and market rankings
+- Moving averages
+- Margin trading and short-selling data
+- Day-trading volume and day-trading ratios
 
-Trading volume and market rankings
-
-Moving averages
-
-Margin trading and short-selling data
-
-Day-trading volume and day-trading ratios
-
-To support public demonstration without access to the original market data infrastructure, the project uses a data-source abstraction layer and a MockMarketDataSource implementation.
+To support public demonstration without access to the original market data infrastructure, the project uses a data-source abstraction layer and a `MockMarketDataSource` implementation.
 
 The mock data is intended to demonstrate pipeline functionality, not to represent real market conditions or validate predictive performance.
 
-Target Label Construction
+### Target Label Construction
 
 The prediction target represents stocks with high next-day day-trading activity.
 
-Exclude stocks with daily trading volume below 10,000 shares, according to the project's eligibility criteria.
-
-Calculate the ratio of day-trading volume to total trading volume.
-
-Rank eligible stocks by their day-trading ratios.
-
-Label the top 30 eligible stocks as the positive class and the remaining eligible stocks as the negative class.
+1. Exclude stocks with daily trading volume below 10,000 shares, according to the project's eligibility criteria.
+2. Calculate the ratio of day-trading volume to total trading volume.
+3. Rank eligible stocks by their day-trading ratios.
+4. Label the top 30 eligible stocks as the positive class and the remaining eligible stocks as the negative class.
 
 Labels must be constructed using information available for the corresponding prediction date, without incorporating future information into the features.
 
-3. Feature Engineering
+## 3. Feature Engineering
 
 The feature engineering pipeline transforms market data into structured inputs for supervised learning.
 
-Lagged Features: Generate historical features from previous trading days to capture changes in trading activity and market behavior.
+- **Lagged Features:** Generate historical features from previous trading days to capture changes in trading activity and market behavior.
+- **Derived Features:** Construct additional indicators from available market variables.
+- **Multi-source Integration:** Align data from different sources by stock identifier and trading date.
+- **Missing-value Handling:** Apply consistent missing-value treatment based on feature characteristics.
+- **Leakage Prevention:** Ensure that features use only information available at the prediction time.
 
-Derived Features: Construct additional indicators from available market variables.
-
-Multi-source Integration: Align data from different sources by stock identifier and trading date.
-
-Missing-value Handling: Apply consistent missing-value treatment based on feature characteristics.
-
-Leakage Prevention: Ensure that features use only information available at the prediction time.
-
-4. Class Imbalance Handling
+## 4. Class Imbalance Handling
 
 The positive class represents a subset of eligible stocks, which may cause a classifier to favor the negative class and miss relevant target stocks.
 
 Class imbalance should therefore be addressed during model training and evaluated using chronological validation.
 
-4.1 Class Weighting
+### 4.1 Class Weighting
 
 Class weighting assigns different loss weights to different classes, increasing the penalty associated with misclassifying positive samples.
 
 Potential implementations include:
 
-Logistic Regression: class_weight="balanced" or explicitly defined class weights.
-
-Random Forest: class_weight="balanced" or class_weight="balanced_subsample".
-
-LightGBM: scale_pos_weight or an appropriate class_weight configuration.
+- **Logistic Regression:** `class_weight="balanced"` or explicitly defined class weights.
+- **Random Forest:** `class_weight="balanced"` or `class_weight="balanced_subsample"`.
+- **LightGBM:** `scale_pos_weight` or an appropriate `class_weight` configuration.
 
 Weight settings should be selected using training data and validated on later periods. They do not need to be identical across all three models.
 
-4.2 Ranking and Threshold Selection
+### 4.2 Ranking and Threshold Selection
 
 Because the final objective is to generate a daily top-30 candidate list, model evaluation should focus on ranking quality as well as conventional classification metrics.
 
 Probability thresholds and ranking strategies should be selected using historical validation data and then evaluated on a separate, later test period.
 
-4.3 Optional Oversampling
+### 4.3 Optional Oversampling
 
 SMOTE or other oversampling techniques can be investigated if class weighting alone does not adequately improve minority-class detection.
 
@@ -114,7 +93,8 @@ Oversampling must be applied only to the training portion of each validation spl
 
 For financial market features, synthetic samples should also be examined for plausibility and consistency with the underlying feature relationships.
 
-Implementation note: These are available strategies for handling class imbalance. The exact weighting parameters and whether oversampling was used should be documented according to the corresponding implementation.
+> **Implementation note:** These are available strategies for handling class imbalance. The exact weighting parameters and whether oversampling was used should be documented according to the corresponding implementation.
+
 ### 5. Stacking Ensemble Architecture
 
 The ensemble combines three base classifiers with complementary modeling characteristics and a Logistic Regression meta-model.
