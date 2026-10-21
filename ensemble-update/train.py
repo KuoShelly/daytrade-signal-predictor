@@ -1,0 +1,63 @@
+"""
+CLI 進入點
+===========
+原本 notebook 是直接在 cell 裡寫死本機路徑（C:\\Users\\user1\\...）去讀 CSV，
+只能在原作者的電腦上跑。這裡改成標準的命令列介面，任何人 clone 下來後：
+
+    pip install -r requirements.txt
+    python train.py --start-date 2023-12-20 --end-date 2024-12-31
+
+就能跑通整條 pipeline（預設用 MockMarketDataSource 產生的示範資料；
+接上真實資料只需要另外實作一個 MarketDataSource 並在這裡替換掉即可）。
+"""
+
+import argparse
+
+from src.data_interface import MockMarketDataSource
+from src.ensemble_model import EnsembleDayTradeModel
+from src.model import DayTradeModel
+from src.pipeline import run_training_pipeline
+from src.synthetic_data import SyntheticSignalDataSource
+
+
+def main():
+    parser = argparse.ArgumentParser(description="當沖熱門股預測 - 訓練與驗證")
+    parser.add_argument("--start-date", default="2023-12-20")
+    parser.add_argument("--end-date", default="2024-12-31")
+    parser.add_argument(
+        "--model",
+        choices=["lightgbm", "stacking", "average"],
+        default="lightgbm",
+        help="lightgbm = 原始版本的單一模型；stacking / average = 重構後新增的三模型融合",
+    )
+    parser.add_argument(
+        "--data",
+        choices=["mock", "synthetic"],
+        default="mock",
+        help="mock = 純亂數示範資料；synthetic = 埋入已知訊號的合成資料（兩者都不是真實市場資料）",
+    )
+    args = parser.parse_args()
+
+    source = MockMarketDataSource() if args.data == "mock" else SyntheticSignalDataSource()
+    model = DayTradeModel() if args.model == "lightgbm" else EnsembleDayTradeModel(method=args.model)
+    model, metrics, confusion, daily = run_training_pipeline(source, args.start_date, args.end_date, model=model)
+
+    print("\n=== 整體績效指標（示範資料，僅供驗證流程用） ===")
+    for k, v in metrics.items():
+        print(f"{k}: {v:.4f}")
+
+    print("\n=== 混淆矩陣 ===")
+    for k, v in confusion.items():
+        print(f"{k}: {v}")
+
+    print("\n=== 每日預測摘要（前 5 天） ===")
+    print(daily.head())
+
+    if getattr(model, "meta_weights", None):
+        print("\n=== Stacking meta-model 權重（成員機率 logit 的係數） ===")
+        for name, w in model.meta_weights.items():
+            print(f"{name}: {w:.3f}")
+
+
+if __name__ == "__main__":
+    main()
